@@ -191,7 +191,7 @@ fn create_rect_contents_cache<'a, T>(
                 let (w, h) = app_resources.get_image_info(&id)?.get_dimensions();
                 Some((node_id, RectContent::Image(w, h)))
             },
-            Text(_) | Label(_) => {
+            Text(_) | Label(_) | TextSlice(_)=> {
                 Some((node_id, RectContent::Text(InlineText {
                     words: words.get(&node_id)?,
                     scaled_words: scaled_words.get(&node_id).map(|(sw, _)| sw)?,

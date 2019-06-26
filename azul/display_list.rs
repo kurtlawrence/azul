@@ -18,7 +18,7 @@ use {
     id_tree::{NodeDataContainer, NodeId, NodeHierarchy},
     dom::{
         DomId, NodeData, ScrollTagId, DomString,
-        NodeType::{self, Div, Text, Image, GlTexture, IFrame, Label},
+        NodeType::{self, Div, Text, TextSlice, Image, GlTexture, IFrame, Label},
     },
     ui_solver::do_the_layout,
     compositor::new_opengl_texture_id,
@@ -681,7 +681,7 @@ fn displaylist_handle_rect<'a,'b,'c,'d,'e,'f, T, U: FontImageApi>(
 
     match html_node {
         Div => { },
-        Text(_) | Label(_) => {
+        Text(_) | Label(_) | TextSlice(_) => {
             if let Some(layouted_glyphs) = referenced_mutable_content.layout_result[dom_id].layouted_glyph_cache.get(&rect_idx).cloned() {
 
                 use azul_core::ui_solver::DEFAULT_FONT_COLOR;

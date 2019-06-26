@@ -236,7 +236,7 @@ fn scan_ui_description_for_font_keys<'a, T>(
         let display_rect = &display_list.rectangles[node_id];
 
         match node_data.get_node_type() {
-            Text(_) | Label(_) => {
+            Text(_) | Label(_) | TextSlice(_)=> {
                 let css_font_id = ui_solver::get_font_id(&display_rect.style);
                 let font_id = match app_resources.css_ids_to_font_ids.get(css_font_id) {
                     Some(s) => ImmediateFontId::Resolved(*s),

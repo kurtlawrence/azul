@@ -12,7 +12,7 @@ use {
         GlCallback, GlCallbackTypeUnchecked,
         IFrameCallback, IFrameCallbackTypeUnchecked,
     },
-    app_resources::{ImageId, TextId},
+    app_resources::{ImageId, TextId, CharRange},
     id_tree::{Arena, NodeDataContainer},
 };
 use azul_css::{NodeTypePath, CssProperty};
@@ -92,6 +92,11 @@ pub enum NodeType<T> {
     Label(DomString),
     /// Larger amount of text, that has to be cached
     Text(TextId),
+	/// View into a `NodeType::Text`. The range is acquired by the
+	/// [`Words::convert_byte_range()`] function.
+	/// 
+	/// [`Words::convert_byte_range()`]: crate::text_layout::Words::convert_byte_range
+	TextSlice((TextId, CharRange)),
     /// An image that is rendered by WebRender. The id is acquired by the
     /// `AppState::add_image()` function
     Image(ImageId),
@@ -111,7 +116,8 @@ impl<T> NodeType<T> {
             Label(s) => Some(format!("{}", s)),
             Image(id) => Some(format!("image({:?})", id)),
             Text(t) => Some(format!("textid({:?})", t)),
-            GlTexture(g) => Some(format!("gltexture({:?})", g)),
+            TextSlice((id, rng)) => Some(format!("textslice({:?}, {:?})", id, rng)),
+			GlTexture(g) => Some(format!("gltexture({:?})", g)),
             IFrame(i) => Some(format!("iframe({:?})", i)),
         }
     }
@@ -126,7 +132,8 @@ impl<T> fmt::Debug for NodeType<T> {
             Div => write!(f, "NodeType::Div"),
             Label(a) => write!(f, "NodeType::Label {{ {:?} }}", a),
             Text(a) => write!(f, "NodeType::Text {{ {:?} }}", a),
-            Image(a) => write!(f, "NodeType::Image {{ {:?} }}", a),
+            TextSlice((id, rng)) => write!(f, "NodeType::TextSlice {{ id: {:?}, range: {:?} }}", id, rng),
+			Image(a) => write!(f, "NodeType::Image {{ {:?} }}", a),
             GlTexture((ptr, cb)) => write!(f, "NodeType::GlTexture {{ ptr: {:?}, callback: {:?} }}", ptr, cb),
             IFrame((ptr, cb)) => write!(f, "NodeType::IFrame {{ ptr: {:?}, callback: {:?} }}", ptr, cb),
         }
@@ -140,6 +147,7 @@ impl<T> Clone for NodeType<T> {
             Div => Div,
             Label(a) => Label(a.clone()),
             Text(a) => Text(a.clone()),
+			TextSlice(a) => TextSlice(a.clone()),
             Image(a) => Image(a.clone()),
             GlTexture((ptr, a)) => GlTexture((ptr.clone(), a.clone())),
             IFrame((ptr, a)) => IFrame((ptr.clone(), a.clone())),
@@ -156,6 +164,10 @@ impl<T> Hash for NodeType<T> {
             Div => { },
             Label(a) => a.hash(state),
             Text(a) => a.hash(state),
+			TextSlice((id, rng)) => {
+				id.hash(state);
+				rng.hash(state);
+			},
             Image(a) => a.hash(state),
             GlTexture((ptr, a)) => {
                 ptr.hash(state);
@@ -176,6 +188,7 @@ impl<T> PartialEq for NodeType<T> {
             (Div, Div) => true,
             (Label(a), Label(b)) => a == b,
             (Text(a), Text(b)) => a == b,
+			(TextSlice(a), TextSlice(b)) => a == b,
             (Image(a), Image(b)) => a == b,
             (GlTexture((ptr_a, a)), GlTexture((ptr_b, b))) => {
                 a == b && ptr_a == ptr_b
@@ -196,7 +209,7 @@ impl<T> NodeType<T> {
         use self::NodeType::*;
         match self {
             Div => NodeTypePath::Div,
-            Label(_) | Text(_) => NodeTypePath::P,
+            Label(_) | Text(_) | TextSlice(_) => NodeTypePath::P,
             Image(_) => NodeTypePath::Img,
             GlTexture(_) => NodeTypePath::Texture,
             IFrame(_) => NodeTypePath::IFrame,

@@ -321,6 +321,99 @@ impl Words {
     pub fn get_char(&self, idx: usize) -> Option<char> {
         self.internal_chars.get(idx).cloned()
     }
+
+	
+    pub fn convert_byte_range<R: std::ops::RangeBounds<usize>>(
+        &self,
+        range: R,
+    ) -> Result<CharRange, ByteIdxNotOnCharBoundary> {
+        use std::ops::Bound;
+
+        // start is inclusive, notice +1s
+        let rstart = match range.start_bound() {
+            Bound::Included(i) => *i,
+            Bound::Excluded(i) => *i + 1,
+            Bound::Unbounded => 0,
+        };
+
+        // end is exclusive
+        let rend = match range.end_bound() {
+            Bound::Included(i) => *i + 1,
+            Bound::Excluded(i) => *i,
+            Bound::Unbounded => self.internal_str.len(),
+        };
+
+        let mut ch_idx = 0;
+        let mut start = 0;
+        let mut start_found = false;
+        let mut end = 0;
+        let mut end_found = false;
+
+        if rend == self.internal_str.len() {
+            end = self.internal_chars.len();
+            end_found = true;
+        }
+
+        for (idx, _) in self.internal_str.char_indices() {
+            if rstart == idx {
+                start = ch_idx;
+                start_found = true;
+            }
+
+            if !end_found && rend == idx {
+                end = ch_idx;
+                end_found = true;
+            }
+
+            ch_idx += 1;
+        }
+
+        if !start_found || !end_found {
+            Err(ByteIdxNotOnCharBoundary)
+        } else {
+            Ok(CharRange { start, end })
+        }
+    }
+
+    pub fn clone_slice(&self, range: CharRange) -> Words {
+        use std::cmp::{max, min};
+        let items = self
+            .items
+            .iter()
+            .filter(|x| x.end > range.start && x.start <= range.end)
+            .map(|x| Word {
+                start: max(x.start, range.start),
+                end: min(x.end, range.end),
+                word_type: x.word_type,
+            })
+            .collect();
+
+        let words = Words {
+            items,
+            internal_str: self.internal_str.clone(),
+            internal_chars: self.internal_chars.clone(),
+        };
+
+        words
+    }
+}
+
+#[derive(Copy, Clone, Debug, PartialEq)]
+pub struct ByteIdxNotOnCharBoundary;
+
+/// A range of characters to be viewed using [`NodeType::TextSlice`].
+/// 
+/// The indices are _character_, not byte, based. Byte ranges can be converted to character
+/// ranges using the [`Words::convert_byte_range()`] function.
+/// 
+/// [`NodeType::TextSlice`]: crate::dom::NodeType::TextSlice
+/// [`Words::convert_byte_range()`]: Words::convert_byte_range
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+pub struct CharRange {
+	/// _Inclusive_ start character index.
+	pub start: usize,
+	/// _Exclusive_ end character index.
+	pub end: usize,
 }
 
 /// Section of a certain type
