@@ -652,6 +652,104 @@ fn test_split_words() {
 }
 
 #[test]
+fn test_char_rng_clone_slice() {
+	use azul_core::app_resources::{CharRange, ByteIdxNotOnCharBoundary};
+	
+	fn cr(start: usize, end: usize) -> CharRange {
+		CharRange {	start, end }
+	}
+
+	let words = split_text_into_words("Hello, world!");
+
+	// initial test..simple from start
+	let slice = words.clone_slice(cr(0, 5)); // Hello
+	let expected = Word { start: 0, end: 5, word_type: WordType::Word };
+
+	assert_eq!(slice.get_str(), "Hello");
+	assert_eq!(slice.internal_chars, vec!['H', 'e', 'l', 'l', 'o']);
+	assert_eq!(&slice.get_substr(&expected), "Hello");
+	assert_eq!(slice.items, vec![expected]);
+
+	// take last word
+	let slice = words.clone_slice(cr(7,12)); // world
+	let expected = Word { start: 0, end: 5, word_type: WordType::Word };
+
+	assert_eq!(slice.get_str(), "world");
+	assert_eq!(slice.internal_chars, vec!['w', 'o', 'r', 'l', 'd']);
+	assert_eq!(&slice.get_substr(&expected), "world");
+	assert_eq!(slice.items, vec![expected]);
+
+	// over space and partial words
+	let slice = words.clone_slice(cr(3,10)); // lo, wor
+	let e1 = Word { start: 0, end: 3, word_type: WordType::Word };
+	let e2 = Word { start: 3, end: 4, word_type: WordType::Space };
+	let e3 = Word { start: 4, end: 7, word_type: WordType::Word };
+
+	assert_eq!(slice.get_str(), "lo, wor");
+	assert_eq!(slice.internal_chars, vec!['l', 'o', ',', ' ', 'w', 'o', 'r']);
+	assert_eq!(&slice.get_substr(&e1), "lo,");
+	assert_eq!(&slice.get_substr(&e2), " ");
+	assert_eq!(&slice.get_substr(&e3), "wor");
+	assert_eq!(slice.items, vec![e1, e2, e3]);
+
+	// complex byte points
+	let words = split_text_into_words("㌊㌋㌌㌍㌎㌏㌐㌑ ㌒㌓㌔㌕㌖㌗");
+
+	let slice = words.clone_slice(cr(6,11)); // ㌐㌑ ㌒㌓
+	let e1 = Word { start: 0, end: 2, word_type: WordType::Word };
+	let e2 = Word { start: 2, end: 3, word_type: WordType::Space };
+	let e3 = Word { start: 3, end: 5, word_type: WordType::Word };
+
+	assert_eq!(slice.get_str(), "㌐㌑ ㌒㌓");
+	assert_eq!(slice.internal_chars, vec!['㌐', '㌑', ' ', '㌒', '㌓']);
+	assert_eq!(&slice.get_substr(&e1), "㌐㌑");
+	assert_eq!(&slice.get_substr(&e2), " ");
+	assert_eq!(&slice.get_substr(&e3), "㌒㌓");
+	assert_eq!(slice.items, vec![e1, e2, e3]);
+
+	// bounds checking
+	dbg!(words.internal_chars.len()); // get char count
+	assert_eq!(words.clone_slice(cr(5,5)), split_text_into_words("")); // empty str
+	assert_eq!(words.clone_slice(cr(16,20)), split_text_into_words("")); // start outside
+	assert_eq!(words.clone_slice(cr(15,20)), split_text_into_words("")); // start on len
+	assert_eq!(words.clone_slice(cr(5,20)), split_text_into_words("㌏㌐㌑ ㌒㌓㌔㌕㌖㌗")); // end outside
+	assert_eq!(words.clone_slice(cr(5,15)), split_text_into_words("㌏㌐㌑ ㌒㌓㌔㌕㌖㌗")); // end on len
+}
+
+#[test]
+fn test_char_rng_convert_byte_range() {
+	use azul_core::app_resources::{CharRange, ByteIdxNotOnCharBoundary};
+
+	fn cr(start: usize, end: usize) -> CharRange {
+		CharRange {	start, end }
+	}
+
+	// simple, all one byte
+	let words = split_text_into_words("Hello, world!");
+
+	assert_eq!(words.convert_byte_range(0..5), Ok(cr(0,5)));
+	assert_eq!(words.convert_byte_range(7..12), Ok(cr(7,12)));	
+	assert_eq!(words.convert_byte_range(..12), Ok(cr(0,12)));
+	assert_eq!(words.convert_byte_range(5..), Ok(cr(5,13)));
+	assert_eq!(words.convert_byte_range(..=12), Ok(cr(0,13)));
+	assert_eq!(words.convert_byte_range(..), Ok(cr(0,13)));
+
+	assert_eq!(words.convert_byte_range(100..), Err(ByteIdxNotOnCharBoundary));
+	assert_eq!(words.convert_byte_range(..100), Err(ByteIdxNotOnCharBoundary));
+	assert_eq!(words.convert_byte_range(90..100), Err(ByteIdxNotOnCharBoundary));
+
+	// complex byte points
+	let words = split_text_into_words("㌊㌋㌌㌍㌎㌏㌐㌑ ㌒㌓㌔㌕㌖㌗");
+	dbg!(words.get_str().char_indices().collect::<Vec<_>>());
+
+	assert_eq!(words.convert_byte_range(0..3), Ok(cr(0,1))); // ㌊
+	assert_eq!(words.convert_byte_range(3..6), Ok(cr(1,2))); // ㌋
+	assert_eq!(words.convert_byte_range(..12), Ok(cr(0,4))); // ㌊㌋㌌㌍
+	assert_eq!(words.convert_byte_range(..), Ok(cr(0,15))); // ㌊㌋㌌㌍㌎㌏㌐㌑ ㌒㌓㌔㌕㌖㌗
+
+}
+
+#[test]
 fn test_get_line_y_position() {
 
     assert_eq!(get_line_y_position(0, 20.0, 0.0), 20.0);

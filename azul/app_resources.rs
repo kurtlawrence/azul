@@ -21,7 +21,7 @@ pub use image::{ImageError, DynamicImage, GenericImageView};
 pub use azul_core::app_resources::{
     AppResources, Au, ImmediateFontId, LoadedFont, RawImageFormat,
     FontKey, FontInstanceKey, ImageKey, ImageSource, FontSource,
-    RawImage, CssFontId, CssImageId, TextCache, TextId, ImageId, FontId,
+    RawImage, CssFontId, CssImageId, TextCache, TextId, CharRange, ImageId, FontId,
     ImageInfo, IdNamespace,
 };
 

@@ -273,7 +273,7 @@ pub mod resources {
     pub use app_resources::{
         LoadedFont, RawImage, FontReloadError, FontSource, ImageReloadError,
         ImageSource, RawImageFormat, CssFontId, CssImageId,
-        TextCache, TextId, FontId, ImageId, image_source_get_bytes, font_source_get_bytes,
+        TextCache, TextId, CharRange,  FontId, ImageId, image_source_get_bytes, font_source_get_bytes,
     };
 }
 
@@ -284,7 +284,7 @@ pub mod prelude {
     pub use async::{Task, TerminateTimer, TimerId, Timer, DropCheck};
     pub use resources::{
         RawImageFormat, ImageId, FontId, FontSource, ImageSource,
-        TextCache, TextId,
+        TextCache, TextId, CharRange
     };
     pub use callbacks::*;
     pub use gl::{
