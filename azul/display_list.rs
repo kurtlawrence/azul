@@ -799,7 +799,7 @@ fn call_opengl_callback<'a,'b,'c,'d,'e,'f, T, U: FontImageApi>(
     let texture = {
 
         let tex = (texture_callback.0)(GlCallbackInfoUnchecked {
-            ptr: *texture_stack_ptr,
+            ptr: texture_stack_ptr.clone(),
             layout_info: LayoutInfo {
                 window: &mut *referenced_mutable_content.fake_window,
                 resources: &referenced_mutable_content.app_resources,
@@ -902,7 +902,7 @@ fn call_iframe_callback<'a,'b,'c,'d,'e, T, U: FontImageApi>(
 
     let new_dom = {
         let iframe_info = IFrameCallbackInfoUnchecked {
-            ptr: *iframe_pointer,
+            ptr: iframe_pointer.clone(),
             layout_info: LayoutInfo {
                 window: referenced_mutable_content.fake_window,
                 resources: &referenced_mutable_content.app_resources,

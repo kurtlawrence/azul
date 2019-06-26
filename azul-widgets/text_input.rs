@@ -6,7 +6,7 @@ use azul_core::{
     dom::{Dom, EventFilter, FocusEventFilter, TabIndex},
     window::{FakeWindow, VirtualKeyCode},
     callbacks::{
-        StackCheckedPointer, DefaultCallbackInfo,
+        StackCheckedPointer, AppValue, DefaultCallbackInfo,
         DefaultCallbackInfoUnchecked, DefaultCallbackId, CallbackReturn,
     },
 };
@@ -57,12 +57,12 @@ impl TextInput {
         TextInput { on_text_input_callback: None }
     }
 
-    pub fn bind<T>(self, window: &mut FakeWindow<T>, field: &TextInputState, data: &T) -> Self {
-        let ptr = StackCheckedPointer::new(data, field);
-        let on_text_input_callback = ptr.map(|ptr|{(
-            window.add_default_callback(text_input_on_text_input_private, ptr),
-            window.add_default_callback(text_input_on_virtual_key_down_private, ptr),
-        )});
+    pub fn bind<T>(self, window: &mut FakeWindow<T>, field: &AppValue<TextInputState>, data: &T) -> Self {
+        let ptr = StackCheckedPointer::new(field);
+        let on_text_input_callback = Some((
+            window.add_default_callback(text_input_on_text_input_private, ptr.clone()),
+            window.add_default_callback(text_input_on_virtual_key_down_private, ptr.clone()),
+        ));
 
         Self {
             on_text_input_callback,

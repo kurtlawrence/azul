@@ -8,7 +8,7 @@ use azul_core::{
         DefaultCallbackInfo, DefaultCallbackInfoUnchecked, CallbackReturn,
         IFrameCallbackInfo, IFrameCallbackInfoUnchecked, IFrameCallbackReturn,
     },
-    callbacks::StackCheckedPointer,
+    callbacks::{StackCheckedPointer, AppValue},
     window::FakeWindow,
 };
 
@@ -59,19 +59,14 @@ impl TableView {
 
     pub fn new() -> Self { Self { } }
 
-    pub fn dom<T>(&self, data: &TableViewState, t: &T, window: &mut FakeWindow<T>) -> Dom<T> {
-        match StackCheckedPointer::new(t, data) {
-            Some(ptr) => {
-                let callback_id = window.add_default_callback(default_table_view_on_click, ptr);
+    pub fn dom<T>(&self, data: &AppValue<TableViewState>, t: &T, window: &mut FakeWindow<T>) -> Dom<T> {
+		let ptr = StackCheckedPointer::new(data);
+
+
+		let callback_id = window.add_default_callback(default_table_view_on_click, ptr.clone());
                 Dom::iframe(render_table_iframe_callback, ptr)
                     .with_class("__azul-native-table-iframe")
                     .with_default_callback_id(On::MouseUp, callback_id)
-            },
-            None => Dom::label(
-                "Cannot create table from heap-allocated TableViewState, \
-                 please call TableViewState::render_dom manually"
-            )
-        }
     }
 }
 

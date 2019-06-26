@@ -18,7 +18,7 @@ use {
     window::{FakeWindow, KeyboardState, MouseState, WindowId, LogicalSize, PhysicalSize},
     gl::Texture,
 };
-pub use stack_checked_pointer::StackCheckedPointer;
+pub use stack_checked_pointer::{StackCheckedPointer, AppValue};
 pub use gleam::gl::Gl;
 
 /// A callback function has to return if the screen should be updated after the

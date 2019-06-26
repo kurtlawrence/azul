@@ -3,8 +3,45 @@ use std::{
     fmt,
     hash::{Hash, Hasher},
     marker::PhantomData,
-    any::TypeId,
+	cell::RefCell,
+	rc::{Rc, Weak},
+	any::Any,
+	ops::{Deref, DerefMut},
 };
+
+pub struct AppValue<T> {
+	inner: Rc<RefCell<T>>,
+}
+
+impl<T> AppValue<T> {
+	pub fn new(value: T) -> Self {
+		Self { inner: Rc::new(RefCell::new(value)) }
+	}
+}
+
+impl<T> Deref for AppValue<T> {
+	type Target = T;
+
+	fn deref(&self) -> &T {
+		let brw = self.inner.borrow();
+		let typed: &T = &brw;
+		let ptr: *const T = typed as *const T;
+		let ret: &T = unsafe { ptr.as_ref().expect("should not be null") };
+
+		ret
+	}
+}
+
+impl<T> DerefMut for AppValue<T> {
+	fn deref_mut(&mut self) -> &mut T {
+		let mut brw = self.inner.borrow_mut();
+		let typed: &mut T = &mut brw;
+		let ptr: *mut T = typed as *mut T;
+		let ret: &mut T = unsafe { ptr.as_mut().expect("should not be null") };
+
+		ret
+	}
+}
 
 /// A `StackCheckedPointer<T>` is a type-erased, raw pointer to a
 /// value **inside** of `T`.
@@ -23,19 +60,12 @@ pub struct StackCheckedPointer<T> {
     /// the data we should update, but storing it in a `Box<T>` to
     /// erase the type doesn't help anything - we trust the user of this
     /// pointer to know the exact type of this pointer.
-    internal: *const (),
+    internal: Weak<Any>,
     /// Marker so that one stack checked pointer can't be shared across
     /// two data models that are both `T: Layout`.
     marker: PhantomData<T>,
-    /// ID of the erased type behind the pointer
-    pointer_type: TypeId,
-}
-
-impl<T: Sized + 'static> StackCheckedPointer<T> {
-    /// Creates a `StackCheckedPointer` that points to the entire struct
-    pub fn new_entire_struct(stack: &T) -> Self {
-        StackCheckedPointer::new(stack, stack).unwrap()
-    }
+	/// Used for hashing and equality.
+	ptr: usize,
 }
 
 impl<T> StackCheckedPointer<T> {
@@ -45,39 +75,31 @@ impl<T> StackCheckedPointer<T> {
     /// This means that the lifetime of U is the same lifetime as T -
     /// the returned `StackCheckedPointer` is valid for as long as `stack`
     /// is valid.
-    pub fn new<U: Sized + 'static>(stack: &T, pointer: &U) -> Option<Self> {
-        if is_subtype_of(stack, pointer) {
-            Some(Self {
-                internal: pointer as *const _ as *const (),
-                marker: PhantomData,
-                pointer_type: TypeId::of::<U>(),
-            })
-        } else {
-            None
-        }
+    pub fn new<U: Sized + 'static>(pointer: &AppValue<U>) -> Self {
+		let ptr: usize = Rc::into_raw(Rc::clone(&pointer.inner)) as usize;
+
+		let weak = Rc::downgrade(&pointer.inner);
+
+		Self {
+			internal: weak,
+			marker: PhantomData,
+			ptr,
+		}
     }
 
-    /// **UNSAFE**: Invoke the pointer with a function pointer that can
-    /// modify the pointer. It isn't checked that the type that the
-    /// `StackCheckedPointer` was created with is the same as this `U`,
-    /// but they **must be the same type**. This can't be checked since
-    /// the type has been (deliberately) erased.
-    ///
-    /// **NOTE**: To avoid undefined behaviour, you **must** check that
-    /// the `StackCheckedPointer` isn't mutably aliased at the time of
-    /// calling the callback.
     #[inline]
-    pub(crate) unsafe fn cast<'a, U: Sized + 'static>(&'a self) -> &'a mut U {
-        #[cfg(debug_assertions)] {
-            let type_id_new = TypeId::of::<U>();
-            if type_id_new != self.pointer_type {
-                panic!(
-                    "Tried to cast a StackCheckedPointer to an invalid type - expected {:?}, got {:?}",
-                    self.pointer_type, type_id_new
-                );
-            }
-        }
-        &mut *(self.internal as *mut U)
+    pub(crate) fn cast<'a, U: Sized + 'static>(&'a self) -> &'a mut U {
+       
+		let rc = self.internal.upgrade()
+			.and_then(|rc| rc.downcast::<RefCell<U>>().ok()).expect("failed casting to RefCell");
+
+		let mut refmut = rc.try_borrow_mut().ok().expect("failed borrowing mutably");
+
+		let typed: &mut U = &mut refmut;
+		let ptr: *mut U = typed as *mut U;
+		let ret: &mut U = unsafe { ptr.as_mut().expect("should not be null") };
+
+		ret
     }
 }
 
@@ -87,35 +109,36 @@ impl<T> fmt::Debug for StackCheckedPointer<T> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f,
             "StackCheckedPointer {{ internal: 0x{:x}, marker: {:?} }}",
-            self.internal as usize, self.marker
+            self.ptr, self.marker
         )
     }
 }
 
 impl<T> Clone for StackCheckedPointer<T> {
     fn clone(&self) -> Self {
-        StackCheckedPointer {
-            internal: self.internal,
-            marker: self.marker.clone(),
-            pointer_type: self.pointer_type,
-        }
+        StackCheckedPointer { 
+			internal: self.internal.clone(), 
+			marker: self.marker.clone(), 
+			ptr: self.ptr
+		}
     }
 }
 
 impl<T> Hash for StackCheckedPointer<T> {
   fn hash<H>(&self, state: &mut H) where H: Hasher {
-    state.write_usize(self.internal as usize);
+    state.write_usize(self.ptr);
   }
 }
 
 impl<T> PartialEq for StackCheckedPointer<T> {
   fn eq(&self, rhs: &Self) -> bool {
-    self.internal as usize == rhs.internal as usize
+    self.ptr == rhs.ptr
   }
 }
 
 impl<T> Eq for StackCheckedPointer<T> { }
-impl<T> Copy for StackCheckedPointer<T> { }
+// impl<T> Copy for StackCheckedPointer<T> { }
+
 
 
 /// Returns true if U is a type inside of T
@@ -167,4 +190,22 @@ fn test_reflection_subtyping() {
     assert_eq!(is_subtype_of(&data, &data.i), true);
     assert_eq!(is_subtype_of(&data, &data.p), true);
     assert_eq!(is_subtype_of(&data, &data.p[0]), false);
+}
+
+#[test]
+fn deref_same_ptr() {
+	let mut value = AppValue {
+		inner: Rc::new(RefCell::new(String::from("Hello, world!")))
+	};
+
+	{
+		let ptr = &*value as *const String as usize;
+		assert_eq!(ptr, value.inner.as_ptr() as usize);
+		let brw = value.inner.borrow();
+		assert_eq!(ptr, &*brw as *const String as usize);
+	}
+
+
+	let ptr = &mut *value as *mut String as usize;
+	assert_eq!(ptr, value.inner.as_ptr() as usize);
 }
